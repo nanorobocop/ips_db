@@ -90,28 +90,37 @@ def db_worker(TaskQueue, ResultQueue):
     from pprint import pprint
     conn = sqlite3.connect(db)
     cur = conn.cursor()
+    start_with = conn.execute('''select ip from ips_db order by ip desc limit 1''').fetchone()[0]
+    print("Starting with IP: {0}".format(num2ip(start_with)))
+    time_delta = datetime.timedelta(minutes=5)
+    time_a = datetime.datetime.utcnow() - time_delta
     try:
         while True:
-            print("Datetime: {0}".format(datetime.datetime.now().isoformat(' ')))
-            cmax = conn.execute('''select ip from ips_db where update_time is null order by ip limit 1''').fetchone()[0]
-            print("Current maximum IP num: {0}".format(cmax))
-            print("Current maximum IP: {0}".format(num2ip(cmax)))
-            print("TaskQueue: {0}; ResultQueue: {1}".format(TaskQueue.qsize(), ResultQueue.qsize()))
-            print("ResultQueue size: {0}".format(ResultQueue.qsize()))
-            print("DB size: {0:.2f} MB".format(os.stat(db).st_size / 1024 / 1024))
-            print()
-            if TaskQueue.qsize() < 100:
-                with conn:
-                    for row in conn.execute('''select ip from ips_db where update_time is null order by ip limit 1000'''):
-                        TaskQueue.put(row[0])
-            if ResultQueue.qsize() > 100:
+            time_b = datetime.datetime.utcnow()
+            if (time_b - time_a > time_delta):
+                print("Datetime: {0}".format(datetime.datetime.now().isoformat(' ')))
+                cmax = conn.execute('''select ip from ips_db order by ip desc limit 1''').fetchone()[0]
+                print("Current maximum IP: {0}".format(num2ip(cmax)))
+                print("TaskQueue: {0}; ResultQueue: {1}".format(TaskQueue.qsize(), ResultQueue.qsize()))
+                print("ResultQueue size: {0}".format(ResultQueue.qsize()))
+                print("DB size: {0:.2f} MB".format(os.stat(db).st_size / 1024 / 1024))
+                print()
+                time_a = datetime.datetime.utcnow()
+            if TaskQueue.qsize() < 5000:
+            #    with conn:
+            #        for row in conn.execute('''select ip from ips_db where update_time is null order by ip limit 10000'''):
+            #            TaskQueue.put(row[0])
+                for i in range(start_with, start_with+10000):
+                     TaskQueue.put(i)
+                start_with += 10001
+            if ResultQueue.qsize() > 1000:
                 values = list()
                 while ResultQueue.qsize() > 0:
                     result = ResultQueue.get()
                     values.append( (result["ip"], result["update_time"], result["ping"], result["port25"], result["port80"]) )
                 with conn:
                     conn.executemany('''insert or replace into ips_db(ip, update_time, ping, port25, port80) values (?, ?, ?, ?, ?)''', values)
-            time.sleep(10)
+            time.sleep(30)
     except:
         print("Exception: " + traceback.format_exc())
         conn.close()

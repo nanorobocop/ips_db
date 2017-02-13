@@ -16,7 +16,7 @@ from multiprocessing import Process, Queue
 import time
 
 checking_params = { 'ping': 1, 'port25': 1, 'port80': 1 }
-workers = 25
+workers = 1
 db = '/mnt/storage/share/projects/ips_db/data/ips_integer.db'
 
 def ips_generator(cmax):
@@ -63,6 +63,7 @@ def proc_connect_checker(TaskQueue, ResultQueue):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(1)
                 res = sock.connect_ex((num2ip(to_check), 25))
+                sock.close()
                 if res == 0:
                     result["port25"] = 1
                 else:
@@ -71,6 +72,7 @@ def proc_connect_checker(TaskQueue, ResultQueue):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(1)
                 res = sock.connect_ex((num2ip(to_check), 80))
+                sock.close()
                 if res == 0:
                     result["port80"] = 1
                 else:
@@ -79,10 +81,10 @@ def proc_connect_checker(TaskQueue, ResultQueue):
             ResultQueue.put(result)
             time.sleep(1)
     except KeyboardInterrupt:
-        print("Exception: " + traceback.format_exc())
+        print("Checker Exception: " + traceback.format_exc())
         pass
     except:
-        print("Exception: " + traceback.format_exc())
+        print("Checker Exception: " + traceback.format_exc())
         pass
 
 def db_worker(TaskQueue, ResultQueue):
@@ -107,9 +109,6 @@ def db_worker(TaskQueue, ResultQueue):
                 print()
                 time_a = datetime.datetime.utcnow()
             if TaskQueue.qsize() < 5000:
-            #    with conn:
-            #        for row in conn.execute('''select ip from ips_db where update_time is null order by ip limit 10000'''):
-            #            TaskQueue.put(row[0])
                 for i in range(start_with, start_with+10000):
                      TaskQueue.put(i)
                 start_with += 10001
@@ -123,8 +122,10 @@ def db_worker(TaskQueue, ResultQueue):
             time.sleep(30)
     except:
         print("Exception: " + traceback.format_exc())
+        print("DB worker exception")
         conn.close()
     conn.close()
+    print("DB worker finished")
 
 if __name__ == '__main__':
     #prepare_db()
@@ -136,3 +137,4 @@ if __name__ == '__main__':
     for i in range(workers):
         connect_checker.append(Process(target=proc_connect_checker, args=(TaskQueue, ResultQueue,)))
         connect_checker[i].start()
+    print("Main process finished")

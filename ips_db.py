@@ -14,9 +14,10 @@
 
 from multiprocessing import Process, Queue
 import time
+import traceback
 
 checking_params = { 'ping': 1, 'port25': 1, 'port80': 1 }
-workers = 1
+workers = 50
 db = '/mnt/storage/share/projects/ips_db/data/ips_integer.db'
 
 def ips_generator(cmax):
@@ -46,7 +47,7 @@ def prepare_db():
     conn.commit()
     
 def proc_connect_checker(TaskQueue, ResultQueue):
-    import os, sys, traceback, time, datetime
+    import os, sys, time, datetime
     import socket
     try:
         while True:
@@ -88,7 +89,7 @@ def proc_connect_checker(TaskQueue, ResultQueue):
         pass
 
 def db_worker(TaskQueue, ResultQueue):
-    import sqlite3, sys, time, datetime, os, traceback
+    import sqlite3, sys, time, datetime, os
     from pprint import pprint
     conn = sqlite3.connect(db)
     cur = conn.cursor()
@@ -131,10 +132,17 @@ if __name__ == '__main__':
     #prepare_db()
     TaskQueue = Queue()
     ResultQueue = Queue()
-    db_workder = Process(target=db_worker, args=(TaskQueue, ResultQueue,))
-    db_workder.start()
+    db_worker = Process(target=db_worker, args=(TaskQueue, ResultQueue,))
+    db_worker.start()
     connect_checker = list()
     for i in range(workers):
         connect_checker.append(Process(target=proc_connect_checker, args=(TaskQueue, ResultQueue,)))
         connect_checker[i].start()
+    try:
+        db_worker.join()
+        for i in range(workers):
+            connect_checker[i].join()
+    except KeyboardInterrupt:
+        print("Main process Exception: " + traceback.format_exc())
+        print("Main process finished")
     print("Main process finished")

@@ -94,10 +94,12 @@ def db_worker(TaskQueue, ResultQueue):
     from pprint import pprint
     conn = sqlite3.connect(db)
     cur = conn.cursor()
+    stat_ips_processed = 0
     start_with = conn.execute('''select ip from ips_db order by ip desc limit 1''').fetchone()[0]
     print("Starting with IP: {0}".format(num2ip(start_with)))
     time_delta = datetime.timedelta(minutes=5)
     time_a = datetime.datetime.utcnow() - time_delta
+    time_start = datetime.datetime.utcnow() 
     try:
         while True:
             time_b = datetime.datetime.utcnow()
@@ -106,7 +108,9 @@ def db_worker(TaskQueue, ResultQueue):
                 cmax = conn.execute('''select ip from ips_db order by ip desc limit 1''').fetchone()[0]
                 print("Current maximum IP: {0}".format(num2ip(cmax)))
                 print("TaskQueue: {0}; ResultQueue: {1}".format(TaskQueue.qsize(), ResultQueue.qsize()))
-                print("ResultQueue size: {0}".format(ResultQueue.qsize()))
+                print("IPs processed: {0}".format(stat_ips_processed))
+                if (time_b - time_start).seconds != 0:
+                    print("Speed from start: {0} IPs/min".format(stat_ips_processed / (time_b - time_start).seconds / 60)) 
                 print("DB size: {0:.2f} MB".format(os.stat(db).st_size / 1024 / 1024))
                 print()
                 time_a = datetime.datetime.utcnow()
@@ -119,6 +123,8 @@ def db_worker(TaskQueue, ResultQueue):
                 while ResultQueue.qsize() > 0:
                     result = ResultQueue.get()
                     values.append( (result["ip"], result["update_time"], result["ping"], result["port25"], result["port80"]) )
+                stat_ips_processed_prev = stat_ips_processed
+                stat_ips_processed += len(values)
                 with conn:
                     conn.executemany('''insert or replace into ips_db(ip, update_time, ping, port25, port80) values (?, ?, ?, ?, ?)''', values)
             time.sleep(30)

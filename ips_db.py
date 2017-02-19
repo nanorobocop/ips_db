@@ -12,12 +12,12 @@
 # port80: null|1
 # 
 
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, cpu_count
 import time
 import traceback
 
 checking_params = { 'ping': 1, 'port25': 1, 'port80': 1 }
-workers = 50
+workers = 30
 db = '/mnt/storage/share/projects/ips_db/data/ips_integer.db'
 
 def ips_generator(cmax):
@@ -51,6 +51,8 @@ def proc_connect_checker(TaskQueue, ResultQueue):
     import socket
     try:
         while True:
+            while os.getloadavg()[0] > cpu_count:
+                time.sleep(5)
             to_check = TaskQueue.get()
             result = dict()
             result["ip"] = to_check
@@ -80,7 +82,6 @@ def proc_connect_checker(TaskQueue, ResultQueue):
                     result["port80"] = 0
             result["update_time"] = int(datetime.datetime.timestamp(datetime.datetime.now()))
             ResultQueue.put(result)
-            time.sleep(1)
     except KeyboardInterrupt:
         print("Checker Exception: " + traceback.format_exc())
         pass
@@ -130,6 +131,7 @@ def db_worker(TaskQueue, ResultQueue):
 
 if __name__ == '__main__':
     #prepare_db()
+    cpu_count = cpu_count()
     TaskQueue = Queue()
     ResultQueue = Queue()
     db_worker = Process(target=db_worker, args=(TaskQueue, ResultQueue,))
